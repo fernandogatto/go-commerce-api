@@ -31,7 +31,53 @@ class CreateOrderService {
   ) {}
 
   public async execute({ customer_id, products }: IRequest): Promise<Order> {
-    // TODO
+    const findCustomer = await this.customersRepository.findById(customer_id);
+
+    if (!findCustomer) {
+      throw new AppError('Customer not found');
+    }
+
+    const products_id = products.map(product => ({ id: product.id }));
+
+    const findAllProducts = await this.productsRepository.findAllById(
+      products_id,
+    );
+
+    if (findAllProducts.length < products_id.length) {
+      throw new AppError('Product not found');
+    }
+
+    const productsInStock = findAllProducts.map(updatedProduct => {
+      const { quantity } = products.find(
+        product => product.id === updatedProduct.id,
+      ) as IProduct;
+
+      return {
+        id: updatedProduct.id,
+        quantity: updatedProduct.quantity - quantity,
+      };
+    });
+
+    if (productsInStock.some(product => product.quantity < 0)) {
+      throw new AppError('Product do not have this quantity in stock');
+    }
+
+    const order = await this.ordersRepository.create({
+      customer: findCustomer,
+      products: findAllProducts.map(product => {
+        const findProduct = products.find(p => p.id === product.id) as IProduct;
+
+        return {
+          quantity: findProduct?.quantity,
+          product_id: product.id,
+          price: product.price,
+        };
+      }),
+    });
+
+    await this.productsRepository.updateQuantity(productsInStock);
+
+    return order;
   }
 }
 
