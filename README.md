@@ -1,5 +1,5 @@
 <p align="center">
-   <img src="./assets/keep-coding.png" width="100%"/>
+   <img src="./github/keep-coding.png" width="100%"/>
 </p>
 
 # 📧 GoCommerce API
