@@ -7,6 +7,12 @@ import ICustomersRepository from '@modules/customers/repositories/ICustomersRepo
 import Order from '../infra/typeorm/entities/Order';
 import IOrdersRepository from '../repositories/IOrdersRepository';
 
+interface IOrderProduct {
+  product_id: string;
+  price: number;
+  quantity: number;
+}
+
 interface IProduct {
   id: string;
   quantity: number;
@@ -37,24 +43,26 @@ class CreateOrderService {
       throw new AppError('Customer not found');
     }
 
+    // get the products IDs from request
     const products_id = products.map(product => ({ id: product.id }));
 
+    // find all products with this id
     const findAllProducts = await this.productsRepository.findAllById(
       products_id,
     );
 
-    if (findAllProducts.length < products_id.length) {
-      throw new AppError('Product not found');
+    if (findAllProducts.length !== products.length) {
+      throw new AppError('One of this products does not exists');
     }
 
-    const productsInStock = findAllProducts.map(updatedProduct => {
-      const { quantity } = products.find(
-        product => product.id === updatedProduct.id,
-      ) as IProduct;
+    const productsInStock: IProduct[] = products.map(product => {
+      const existingQuantity =
+        findAllProducts.find(findProduct => findProduct.id === product.id)
+          ?.quantity || 0;
 
       return {
-        id: updatedProduct.id,
-        quantity: updatedProduct.quantity - quantity,
+        id: product.id,
+        quantity: existingQuantity - product.quantity,
       };
     });
 
@@ -62,17 +70,17 @@ class CreateOrderService {
       throw new AppError('Product do not have this quantity in stock');
     }
 
+    const insertProducts: IOrderProduct[] = products.map(product => ({
+      product_id: product.id,
+      price:
+        findAllProducts.find(findProduct => findProduct.id === product.id)
+          ?.price || 0,
+      quantity: product.quantity,
+    }));
+
     const order = await this.ordersRepository.create({
       customer: findCustomer,
-      products: findAllProducts.map(product => {
-        const findProduct = products.find(p => p.id === product.id) as IProduct;
-
-        return {
-          quantity: findProduct?.quantity,
-          product_id: product.id,
-          price: product.price,
-        };
-      }),
+      products: insertProducts,
     });
 
     await this.productsRepository.updateQuantity(productsInStock);
